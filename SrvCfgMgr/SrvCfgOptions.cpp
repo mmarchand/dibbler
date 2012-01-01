@@ -231,6 +231,22 @@ SPtr<TIPv6Addr> TSrvCfgOptions::getAddr() {
     return Addr;
 }
 
+void TSrvCfgOptions::setPrefix(SPtr<TIPv6Addr> prefix) {
+    Prefix = prefix;
+}
+
+void TSrvCfgOptions::setPrefixLength(int length) {
+    PrefixLength = length;
+}
+
+SPtr<TIPv6Addr> TSrvCfgOptions::getPrefix() {
+    return Prefix;
+}
+
+int TSrvCfgOptions::getPrefixLength() {
+    return PrefixLength;
+}
+
 void TSrvCfgOptions::addExtraOption(SPtr<TOpt> custom, bool always) {
     Log(Debug) << "Setting " << (always?"mandatory ":"request-only ")
                << custom->getOptType() << " generic option (length=" 

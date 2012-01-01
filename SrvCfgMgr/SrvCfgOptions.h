@@ -46,6 +46,12 @@ public:
     void setAddr(SPtr<TIPv6Addr> addr);
     SPtr<TIPv6Addr> getAddr();
 
+    // prefix reservation
+    void setPrefix(SPtr<TIPv6Addr> prefix);
+    void setPrefixLength(int length);
+    SPtr<TIPv6Addr> getPrefix();
+    int getPrefixLength();
+
     // option: DNS Servers
     List(TIPv6Addr) * getDNSServerLst();
     void setDNSServerLst(List(TIPv6Addr) *lst);
@@ -127,6 +133,9 @@ private:
 
     // address reservation
     SPtr<TIPv6Addr> Addr;
+    // prefix reservation
+    SPtr<TIPv6Addr> Prefix;
+    int PrefixLength;
 
     // options reservation
     List(TIPv6Addr) DNSServerLst;
