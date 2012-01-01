@@ -55,6 +55,7 @@ List(string) PresentStringLst;             /* string list */                    
 List(Node) NodeClientClassLst;             /* Node list */                           \
 List(TFQDN) PresentFQDNLst;                                                          \
 SPtr<TIPv6Addr> addr;                                                                \
+SPtr<TIPv6Addr> prefix;                                                                \
 List(TStationRange) PresentRangeLst;                                                 \
 List(TStationRange) PDLst;                                                           \
 List(TSrvCfgOptions) ClientLst;                                                      \
@@ -110,7 +111,7 @@ virtual ~SrvParser();
 %token PDCLASS_, PD_LENGTH_, PD_POOL_
 %token SCRIPT_
 %token VENDOR_SPEC_
-%token CLIENT_, DUID_KEYWORD_, REMOTE_ID_, ADDRESS_, GUESS_MODE_
+%token CLIENT_, DUID_KEYWORD_, REMOTE_ID_, ADDRESS_, GUESS_MODE_, PREFIX_
 %token INACTIVE_MODE_
 %token EXPERIMENTAL_, ADDR_PARAMS_, REMOTE_AUTOCONF_NEIGHBORS_
 %token AFTR_
@@ -306,7 +307,44 @@ ClientOption
 | ExtraOption
 | DsLiteAftrName
 | AddressReservation
+| PrefixReservation
 ;
+
+PrefixReservation:
+PREFIX_ IPV6ADDR_ '/' INTNUMBER_
+{
+    prefix = new TIPv6Addr($2);
+    int pfxlength = $4;
+    if ( (pfxlength<1) || (pfxlength>128)) {
+	    Log(Crit) << "Invalid prefix defined: " << pfxlength << " in line " << lex->lineno()
+		    << ". Allowed range: 1..128." << LogEnd;
+	    YYABORT;
+    }
+    Log(Info) << "Exception: Prefix " << prefix->getPlain() << "/" << pfxlength << " reserved." << LogEnd;
+    ClientLst.getLast()->setPrefix(prefix);
+    ClientLst.getLast()->setPrefixLength(pfxlength);
+
+    SPtr<TIPv6Addr> addr1 = this->getRangeMin($2, pfxlength);
+    SPtr<TIPv6Addr> addr2 = this->getRangeMax($2, pfxlength);
+    SPtr<TStationRange> range = 0;
+    if (*addr1<=*addr2)
+	    range = new TStationRange(addr1,addr2);
+    else
+	    range = new TStationRange(addr2,addr1);
+    range->setPrefixLength(pfxlength);
+    ParserOptStack.append(new TSrvParsGlobalOpt(*ParserOptStack.getLast()));
+    this->PDLst.clear();
+    this->PDPrefix = pfxlength;
+    PDLst.append(range);
+    SPtr<TSrvCfgPD> ptrPD = new TSrvCfgPD();
+    ParserOptStack.getLast()->setPool(&this->PDLst);
+    if (!ptrPD->setOptions(ParserOptStack.getLast(), this->PDPrefix))
+	return false;
+    SrvCfgPDLst.append(ptrPD);
+
+    // remove temporary parser object for this (just finished) scope
+    ParserOptStack.delLast();
+};
 
 AddressReservation:
 ADDRESS_ IPV6ADDR_
