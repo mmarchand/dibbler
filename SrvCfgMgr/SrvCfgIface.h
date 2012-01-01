@@ -102,6 +102,8 @@ public:
     // per-client parameters (exceptions)
     void addClientExceptionsLst(List(TSrvCfgOptions) exLst);
     SPtr<TSrvCfgOptions> getClientException(SPtr<TDUID> duid, SPtr<TOptVendorData> remoteID, bool quiet=true);
+    bool checkReservedPrefix(SPtr<TIPv6Addr> pfx, SPtr<TDUID> duid, SPtr<TOptVendorData> remoteID);
+
 
     // option: FQDN
     List(TFQDN) * getFQDNLst();
