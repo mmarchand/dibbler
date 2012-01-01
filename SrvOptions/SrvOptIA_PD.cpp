@@ -157,8 +157,14 @@ int TSrvOptIA_PD::assignPrefix(SPtr<TIPv6Addr> hint, bool fake) {
 
     if (hint->getPlain()==string("::") ) {
         cached = SrvAddrMgr().getCachedEntry(ClntDuid, TAddrIA::TYPE_PD);
-        if (cached)
+        if (cached) {
             hint = cached;
+	} else {
+	    //if we have a client reservation, try to use it
+	    if (getExceptionPrefix()) {
+	        hint = getExceptionPrefix();
+	    }
+	}
     }
 
     // get address
@@ -167,7 +173,21 @@ int TSrvOptIA_PD::assignPrefix(SPtr<TIPv6Addr> hint, bool fake) {
     ostringstream buf;
     bool alreadyIncreased = false;
     prefixLst.first();
-    while (prefix = prefixLst.get()) {
+    SPtr<TSrvCfgIface> ptrIface = SrvCfgMgr().getIfaceByID(Iface);
+    if (!ptrIface) {
+        Log(Error) << "Unable to find interface with ifindex="
+                   << Iface << ". Something is wrong, VERY wrong." << LogEnd;
+        return STATUSCODE_NOPREFIXAVAIL;
+    }
+    SPtr<TOptVendorData> remoteID;
+    TSrvMsg * par = dynamic_cast<TSrvMsg*>(Parent);
+    if (par) {
+        remoteID = par->getRemoteID();
+    }
+    //make sure a prefix is not reserved by another client
+    while (prefix = prefixLst.get() ) {
+      if ( ptrIface->checkReservedPrefix(prefix,ClntDuid,remoteID) )
+	continue;
       buf << prefix->getPlain() << "/" << this->PDLength << " ";
       optPrefix = new TSrvOptIAPrefix(prefix, (char)this->PDLength, this->Prefered, this->Valid, this->Parent);
       SubOptions.append((Ptr*)optPrefix);
@@ -357,6 +377,7 @@ void TSrvOptIA_PD::rebind(SPtr<TSrvOptIA_PD> queryOpt, SPtr<TSrvCfgIface> iface)
 
 void TSrvOptIA_PD::release(SPtr<TSrvOptIA_PD> queryOpt, SPtr<TSrvCfgIface> iface) {
     /// @todo: implement PD support in RELEASE message
+	Log(Debug) <<" TODO RELEASE MSG." << LogEnd;
 }
 
 void TSrvOptIA_PD::confirm(SPtr<TSrvOptIA_PD> queryOpt, SPtr<TSrvCfgIface> iface) {
@@ -369,6 +390,30 @@ void TSrvOptIA_PD::decline(SPtr<TSrvOptIA_PD> queryOpt, SPtr<TSrvCfgIface> iface
 
 bool TSrvOptIA_PD::doDuties() {
     return true;
+}
+
+SPtr<TIPv6Addr> TSrvOptIA_PD::getExceptionPrefix() {
+    SPtr<TSrvCfgIface> ptrIface = SrvCfgMgr().getIfaceByID(Iface);
+    if (!ptrIface) {
+        return 0;
+    }
+
+    SPtr<TOptVendorData> remoteID;
+
+    TSrvMsg * par = dynamic_cast<TSrvMsg*>(Parent);
+    if (par) {
+        remoteID = par->getRemoteID();
+    }
+
+    SPtr<TSrvCfgOptions> ex = ptrIface->getClientException(ClntDuid, remoteID, false/* false = verbose */);
+
+    if (ex) {
+        Log(Debug) << "PD: Client exception found." << ex->getPrefix()->getPlain() << LogEnd;
+        return ex->getPrefix();
+    }
+    Log(Debug) << "PD: Client exception NOT found." << LogEnd;
+
+    return 0;
 }
 
 /**
@@ -444,12 +489,18 @@ List(TIPv6Addr) TSrvOptIA_PD::getFreePrefixes(SPtr<TIPv6Addr> hint) {
     // Get the request message from client
     SPtr<TSrvMsg> requestMsg = SrvTransMgr().getCurrentRequest();
 
+    SPtr<TOptVendorData> remoteID;
+    TSrvMsg * par = dynamic_cast<TSrvMsg*>(Parent);
+    if (par) {
+	    remoteID = par->getRemoteID();
+    }
+
     if ( validHint ) {
       // hint is valid, try to use it
       ptrPD = SrvCfgMgr().getClassByPrefix(this->Iface, hint);
 
       // if the PD allow the hint, based on DUID, Addr, and Msg from client
-     if (ptrPD && ptrPD->clntSupported(ClntDuid, ClntAddr, requestMsg ))
+     if (ptrPD && ptrPD->clntSupported(ClntDuid, ClntAddr, requestMsg ) && !ptrIface->checkReservedPrefix(hint,ClntDuid,remoteID) )
          {
                   // case 2: address belongs to supported class, and is free
                   if ( ptrPD && SrvAddrMgr().prefixIsFree(hint) ) {
